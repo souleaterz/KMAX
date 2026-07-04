@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KMAX</string>
+    <string name="title_activity_main">KMAX</string>
+    <string name="package_name">com.kmax.streaming</string>
+    <string name="custom_url_scheme">com.kmax.streaming</string>
+</resources>

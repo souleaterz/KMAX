@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="KMAX poster fallback">
+  <rect width="400" height="600" fill="#202128"/>
+  <rect x="36" y="38" width="328" height="524" rx="12" fill="#111216" stroke="#3d404a" stroke-width="4"/>
+  <text x="200" y="292" fill="#e50914" font-family="Arial, sans-serif" font-size="58" font-weight="900" text-anchor="middle">KMAX</text>
+  <text x="200" y="334" fill="#f3f3f4" font-family="Arial, sans-serif" font-size="22" font-weight="700" text-anchor="middle">STREAMING</text>
+</svg>
