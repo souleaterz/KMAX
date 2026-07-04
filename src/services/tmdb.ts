@@ -18,6 +18,13 @@ type TmdbItem = {
   media_type?: MediaType
 }
 
+type TmdbVideo = {
+  key: string
+  site: string
+  type: string
+  official?: boolean
+}
+
 async function tmdb<T>(path: string): Promise<T> {
   if (!TMDB_TOKEN) throw new Error('TMDB token is not configured')
   const res = await fetch(`${TMDB_BASE_URL}${path}`, {
@@ -116,6 +123,24 @@ export async function getMediaDetail(type: MediaType, id: number): Promise<Media
     base.seasons = await getSeasons(id, detail.seasons ?? [])
   }
   return base
+}
+
+export async function getPreviewVideo(type: MediaType, id: number): Promise<string | null> {
+  if (!TMDB_TOKEN) return null
+  const data = await tmdb<{ results: TmdbVideo[] }>(`/${type}/${id}/videos?language=en-US`)
+  const video = data.results
+    .filter((entry) => entry.site === 'YouTube')
+    .sort((a, b) => scoreVideo(b) - scoreVideo(a))[0]
+  return video?.key ?? null
+}
+
+function scoreVideo(video: TmdbVideo) {
+  let score = 0
+  if (video.official) score += 5
+  if (video.type === 'Trailer') score += 4
+  if (video.type === 'Teaser') score += 3
+  if (video.type === 'Clip') score += 2
+  return score
 }
 
 async function getSeasons(id: number, seasons: { season_number: number; name: string }[]): Promise<Season[]> {

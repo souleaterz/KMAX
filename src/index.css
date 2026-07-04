@@ -8,11 +8,20 @@
 
 * { box-sizing: border-box; }
 
+html,
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.rail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 button, input {
@@ -90,16 +99,45 @@ input:focus-visible {
 }
 
 .hero-panel {
+  position: relative;
   min-height: min(76vh, 760px);
   display: flex;
   align-items: end;
   padding: 9vw 5vw 6vw;
   background-size: cover;
   background-position: center;
+  overflow: hidden;
 }
 
 .hero-copy {
+  position: relative;
+  z-index: 2;
   max-width: 780px;
+}
+
+.hero-preview-video {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 120vw;
+  height: 67.5vw;
+  min-width: 100%;
+  min-height: 100%;
+  border: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.04);
+  opacity: 0.48;
+}
+
+.hero-video-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, #08080a 0%, rgba(8, 8, 10, 0.84) 34%, rgba(8, 8, 10, 0.18) 100%),
+    linear-gradient(0deg, #08080a 0%, transparent 42%);
+  pointer-events: none;
 }
 
 .kicker {
@@ -196,6 +234,7 @@ p {
   overflow-x: auto;
   padding: 4px 5vw 18px 0;
   scroll-snap-type: x mandatory;
+  scrollbar-width: none;
 }
 
 .poster-card {

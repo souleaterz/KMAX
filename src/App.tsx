@@ -5,7 +5,7 @@ import { Bookmark, Check, Film, Home, Play, Search, Settings, Star, Tv, X } from
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { backdropUrl, imageUrl } from './config'
-import { getHomeRows, getMediaDetail, searchMedia } from './services/tmdb'
+import { getHomeRows, getMediaDetail, getPreviewVideo, searchMedia } from './services/tmdb'
 import { findStreamsWithDiagnostics } from './services/providers'
 import { getProgressFor, getSettings, mediaKey, saveProgress, saveSettings, toggleWatchlist } from './services/storage'
 import { useProgress, useSettings, useWatchlist } from './hooks/useLocalData'
@@ -13,9 +13,14 @@ import { useRemoteKeys } from './hooks/useRemoteKeys'
 import { isKmaxNative, nativePlay } from './services/kmaxNative'
 import type { Episode, MediaItem, MediaType, PlaybackTarget, StreamSource } from './types'
 
-function FocusLink({ to, className, children }: { to: string; className?: string; children: React.ReactNode }) {
+function FocusLink({
+  to,
+  className,
+  children,
+  ...props
+}: { to: string; className?: string; children: React.ReactNode } & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   return (
-    <Link to={to} className={className} data-focusable="true">
+    <Link to={to} className={className} data-focusable="true" {...props}>
       {children}
     </Link>
   )
@@ -67,26 +72,54 @@ function Sidebar() {
 function HomeScreen() {
   const rowsQuery = useQuery({ queryKey: ['home'], queryFn: getHomeRows })
   const progress = useProgress()
+  const [previewItem, setPreviewItem] = useState<MediaItem | null>(null)
   const rows = rowsQuery.data ?? []
   const featured = rows[0]?.items[0]
+  const heroItem = previewItem ?? featured
   return (
     <div>
-      {featured && <Hero item={featured} />}
-      {progress.length > 0 && <ResumeRow items={progress} />}
+      {heroItem && <Hero item={heroItem} previewActive={Boolean(previewItem)} />}
+      {progress.length > 0 && <ResumeRow items={progress} onPreview={setPreviewItem} />}
       {rowsQuery.isLoading && <SkeletonRows />}
       {rowsQuery.isError && <EmptyState title="Metadata unavailable" body="Check your TMDB token or continue with the fallback catalog." />}
       {rows.map((row) => (
-        <MediaRow key={row.title} title={row.title} items={row.items} />
+        <MediaRow key={row.title} title={row.title} items={row.items} onPreview={setPreviewItem} />
       ))}
     </div>
   )
 }
 
-function Hero({ item }: { item: MediaItem }) {
+function Hero({ item, previewActive = false }: { item: MediaItem; previewActive?: boolean }) {
+  const [readyForVideo, setReadyForVideo] = useState(false)
+  const videoQuery = useQuery({
+    queryKey: ['preview-video', item.mediaType, item.id],
+    queryFn: () => getPreviewVideo(item.mediaType, item.id),
+    enabled: previewActive,
+    staleTime: 1000 * 60 * 60,
+  })
+
+  useEffect(() => {
+    setReadyForVideo(false)
+    if (!previewActive) return
+    const timer = window.setTimeout(() => setReadyForVideo(true), 650)
+    return () => window.clearTimeout(timer)
+  }, [item.id, item.mediaType, previewActive])
+
+  const videoKey = readyForVideo ? videoQuery.data : null
   return (
     <section className="hero-panel" style={{ backgroundImage: `linear-gradient(90deg, #08080a 0%, rgba(8,8,10,.86) 36%, rgba(8,8,10,.12) 100%), url(${backdropUrl(item.backdropPath)})` }}>
+      {videoKey && (
+        <iframe
+          className="hero-preview-video"
+          title={`${item.title} preview`}
+          src={`https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${videoKey}&modestbranding=1&rel=0`}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          tabIndex={-1}
+        />
+      )}
+      <div className="hero-video-scrim" />
       <div className="hero-copy">
-        <div className="kicker">{item.mediaType === 'movie' ? 'Movie' : 'Series'} Spotlight</div>
+        <div className="kicker">{previewActive ? 'Previewing' : item.mediaType === 'movie' ? 'Movie Spotlight' : 'Series Spotlight'}</div>
         <h1>{item.title}</h1>
         <p>{item.overview}</p>
         <div className="meta-line">
@@ -107,26 +140,65 @@ function Hero({ item }: { item: MediaItem }) {
   )
 }
 
-function MediaRow({ title, items, progress = false }: { title: string; items: MediaItem[]; progress?: boolean }) {
+function MediaRow({
+  title,
+  items,
+  progress = false,
+  onPreview,
+}: {
+  title: string
+  items: MediaItem[]
+  progress?: boolean
+  onPreview?: (item: MediaItem | null) => void
+}) {
   if (!items.length) return null
   return (
     <section className="media-row">
       <h2>{title}</h2>
       <div className="rail">
         {items.map((item) => (
-          <FocusLink key={`${item.mediaType}-${item.id}`} to={`/${item.mediaType}/${item.id}`} className="poster-card">
-            <img src={imageUrl(item.posterPath, 'w342')} alt="" loading="lazy" />
-            <div className="poster-gradient" />
-            <div className="poster-title">{item.title}</div>
-            {progress && <div className="progress-strip" />}
-          </FocusLink>
+          <PreviewCard key={`${item.mediaType}-${item.id}`} item={item} progress={progress} onPreview={onPreview} />
         ))}
       </div>
     </section>
   )
 }
 
-function ResumeRow({ items }: { items: ReturnType<typeof useProgress> }) {
+function PreviewCard({
+  item,
+  progress = false,
+  progressPercent,
+  onPreview,
+}: {
+  item: MediaItem
+  progress?: boolean
+  progressPercent?: number
+  onPreview?: (item: MediaItem | null) => void
+}) {
+  function preview() {
+    onPreview?.(item)
+  }
+
+  return (
+    <FocusLink
+      to={`/${item.mediaType}/${item.id}`}
+      className="poster-card"
+      onMouseEnter={preview}
+      onMouseMove={preview}
+      onMouseOver={preview}
+      onPointerEnter={preview}
+      onFocus={preview}
+      onFocusCapture={preview}
+    >
+            <img src={imageUrl(item.posterPath, 'w342')} alt="" loading="lazy" />
+            <div className="poster-gradient" />
+            <div className="poster-title">{item.title}</div>
+      {progress && <div className="progress-strip" style={progressPercent ? { width: `${progressPercent}%` } : undefined} />}
+    </FocusLink>
+  )
+}
+
+function ResumeRow({ items, onPreview }: { items: ReturnType<typeof useProgress>; onPreview?: (item: MediaItem | null) => void }) {
   return (
     <section className="media-row">
       <h2>Resume Watching</h2>
@@ -134,12 +206,7 @@ function ResumeRow({ items }: { items: ReturnType<typeof useProgress> }) {
         {items.map((item) => {
           const percent = item.duration > 0 ? Math.min(100, Math.max(3, (item.seconds / item.duration) * 100)) : 8
           return (
-            <FocusLink key={item.key} to={`/${item.media.mediaType}/${item.media.id}`} className="poster-card">
-              <img src={imageUrl(item.media.posterPath, 'w342')} alt="" loading="lazy" />
-              <div className="poster-gradient" />
-              <div className="poster-title">{item.episode ? `${item.media.title}: ${item.episode.title}` : item.media.title}</div>
-              <div className="progress-strip" style={{ width: `${percent}%` }} />
-            </FocusLink>
+            <PreviewCard key={item.key} item={item.media} progress progressPercent={percent} onPreview={onPreview} />
           )
         })}
       </div>
