@@ -3,8 +3,13 @@ name: Android Debug APK
 on:
   push:
     branches: [main, master]
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -65,3 +70,14 @@ jobs:
           name: kmax-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: KMAX ${{ github.ref_name }}
+          body: |
+            KMAX Android TV / Firestick debug APK.
+
+            This build includes the native Firestick playback bridge, Torrentio/Stremio provider support, and optional Real-Debrid resolving for private builds.
+          files: android/app/build/outputs/apk/debug/*.apk
