@@ -47,23 +47,29 @@ function App() {
 }
 
 function Sidebar() {
-  const links = [
+  const primaryLinks = [
     { to: '/', label: 'Home', icon: Home },
     { to: '/search', label: 'Search', icon: Search },
     { to: '/browse/action', label: 'Genres', icon: Film },
     { to: '/watchlist', label: 'Watchlist', icon: Bookmark },
-    { to: '/settings', label: 'Settings', icon: Settings },
   ]
+  const settingsLink = { to: '/settings', label: 'Settings', icon: Settings }
   return (
     <aside className="sidebar">
       <div className="brand">KMAX</div>
-      <nav>
-        {links.map(({ to, label, icon: Icon }) => (
+      <nav className="sidebar-nav">
+        {primaryLinks.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} data-focusable="true" className={({ isActive }) => (isActive ? 'active' : '')}>
             <Icon size={24} />
             <span>{label}</span>
           </NavLink>
         ))}
+      </nav>
+      <nav className="sidebar-settings">
+        <NavLink to={settingsLink.to} data-focusable="true" className={({ isActive }) => (isActive ? 'active' : '')}>
+          <settingsLink.icon size={24} />
+          <span>{settingsLink.label}</span>
+        </NavLink>
       </nav>
     </aside>
   )
@@ -73,23 +79,100 @@ function HomeScreen() {
   const rowsQuery = useQuery({ queryKey: ['home'], queryFn: getHomeRows })
   const progress = useProgress()
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null)
+  const [activeRow, setActiveRow] = useState(0)
+  const pendingFocusIndex = useRef<number | null>(null)
   const rows = rowsQuery.data ?? []
   const featured = rows[0]?.items[0]
   const heroItem = previewItem ?? featured
+  const visibleRows = [
+    ...(progress.length > 0 ? [{ key: 'resume', title: 'Resume Watching', kind: 'resume' as const, items: progress }] : []),
+    ...rows.map((row) => ({ key: row.title, title: row.title, kind: 'media' as const, items: row.items })),
+  ].filter((row) => row.items.length > 0)
+  const currentRow = visibleRows[Math.min(activeRow, Math.max(0, visibleRows.length - 1))]
+
+  useEffect(() => {
+    setActiveRow((row) => Math.min(row, Math.max(0, visibleRows.length - 1)))
+  }, [visibleRows.length])
+
+  useEffect(() => {
+    if (!currentRow) return
+    window.requestAnimationFrame(() => {
+      const active = document.activeElement
+      if (active && active !== document.body) return
+      document.querySelector<HTMLElement>('.home-row-slot .poster-card')?.focus()
+    })
+  }, [currentRow])
+
+  useEffect(() => {
+    if (pendingFocusIndex.current === null) return
+    const index = pendingFocusIndex.current
+    pendingFocusIndex.current = null
+    window.requestAnimationFrame(() => {
+      const posters = Array.from(document.querySelectorAll<HTMLElement>('.home-row-slot .poster-card'))
+      const target = posters[Math.min(index, posters.length - 1)]
+      target?.focus()
+      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+  }, [activeRow])
+
+  useEffect(() => {
+    const visiblePosters = () => Array.from(document.querySelectorAll<HTMLElement>('.home-row-slot .poster-card'))
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return
+      if (!(event.target instanceof Element) || !event.target.closest('.home-screen')) return
+      const posters = visiblePosters()
+      if (!posters.length) return
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const activeIndex = active ? posters.indexOf(active) : -1
+      event.preventDefault()
+      event.stopImmediatePropagation()
+
+      if (activeIndex === -1) {
+        posters[0]?.focus()
+        return
+      }
+
+      if (event.key === 'ArrowRight') {
+        posters[Math.min(activeIndex + 1, posters.length - 1)]?.focus()
+        return
+      }
+      if (event.key === 'ArrowLeft') {
+        posters[Math.max(activeIndex - 1, 0)]?.focus()
+        return
+      }
+
+      if (visibleRows.length < 2) return
+      pendingFocusIndex.current = activeIndex
+      setActiveRow((row) => {
+        if (event.key === 'ArrowDown') return Math.min(row + 1, visibleRows.length - 1)
+        return Math.max(row - 1, 0)
+      })
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [visibleRows.length])
+
   return (
-    <div>
+    <div className="home-screen">
       {heroItem && <Hero item={heroItem} previewActive={Boolean(previewItem)} />}
-      {progress.length > 0 && <ResumeRow items={progress} onPreview={setPreviewItem} />}
       {rowsQuery.isLoading && <SkeletonRows />}
       {rowsQuery.isError && <EmptyState title="Metadata unavailable" body="Check your TMDB token or continue with the fallback catalog." />}
-      {rows.map((row) => (
-        <MediaRow key={row.title} title={row.title} items={row.items} onPreview={setPreviewItem} />
-      ))}
+      {currentRow && (
+        <div className="home-row-slot">
+          {currentRow.kind === 'resume' ? (
+            <ResumeRow items={currentRow.items} onPreview={setPreviewItem} />
+          ) : (
+            <MediaRow title={currentRow.title} items={currentRow.items} onPreview={setPreviewItem} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 function Hero({ item, previewActive = false }: { item: MediaItem; previewActive?: boolean }) {
+  const settings = useSettings()
   const [readyForVideo, setReadyForVideo] = useState(false)
   const videoQuery = useQuery({
     queryKey: ['preview-video', item.mediaType, item.id],
@@ -106,13 +189,14 @@ function Hero({ item, previewActive = false }: { item: MediaItem; previewActive?
   }, [item.id, item.mediaType, previewActive])
 
   const videoKey = readyForVideo ? videoQuery.data : null
+  const trailerMuted = settings.trailerSound ? 0 : 1
   return (
-    <section className="hero-panel" style={{ backgroundImage: `linear-gradient(90deg, #08080a 0%, rgba(8,8,10,.86) 36%, rgba(8,8,10,.12) 100%), url(${backdropUrl(item.backdropPath)})` }}>
+    <section className="hero-panel" style={{ backgroundImage: `linear-gradient(90deg, #08080a 0%, rgba(8,8,10,.68) 34%, rgba(8,8,10,.04) 100%), url(${backdropUrl(item.backdropPath)})` }}>
       {videoKey && (
         <iframe
           className="hero-preview-video"
           title={`${item.title} preview`}
-          src={`https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${videoKey}&modestbranding=1&rel=0`}
+          src={`https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&mute=${trailerMuted}&controls=0&playsinline=1&loop=1&playlist=${videoKey}&modestbranding=1&rel=0`}
           allow="autoplay; encrypted-media; picture-in-picture"
           tabIndex={-1}
         />
@@ -126,14 +210,6 @@ function Hero({ item, previewActive = false }: { item: MediaItem; previewActive?
           <span>{item.year || 'New'}</span>
           <span>{item.rating ? `${item.rating.toFixed(1)} rating` : 'Unrated'}</span>
           <span>{item.genres?.slice(0, 2).join(' / ')}</span>
-        </div>
-        <div className="hero-actions">
-          <FocusLink to={`/${item.mediaType}/${item.id}`} className="primary-button">
-            <Play size={22} fill="currentColor" /> Play
-          </FocusLink>
-          <FocusLink to={`/${item.mediaType}/${item.id}`} className="secondary-button">
-            More Info
-          </FocusLink>
         </div>
       </div>
     </section>
@@ -442,6 +518,7 @@ function SettingsScreen() {
       <h1>Settings</h1>
       <SettingRow title="Autoplay next episode" active={settings.autoplay} onClick={() => update('autoplay')} />
       <SettingRow title="Prefer subtitles when available" active={settings.subtitles} onClick={() => update('subtitles')} />
+      <SettingRow title="Hero trailer sound" active={settings.trailerSound} onClick={() => update('trailerSound')} />
       <SettingRow title="Reduce motion" active={settings.reducedMotion} onClick={() => update('reducedMotion')} />
       <div className="status-box">
         TMDB: {import.meta.env.VITE_TMDB_TOKEN ? 'configured' : 'fallback catalog'} · Providers: {import.meta.env.VITE_KMAX_PROVIDER_CONFIG ? 'custom config' : 'sample only'}

@@ -8,6 +8,7 @@ export type Settings = {
   autoplay: boolean
   subtitles: boolean
   reducedMotion: boolean
+  trailerSound: boolean
 }
 
 export function mediaKey(media: MediaItem, episodeId?: number) {
@@ -56,7 +57,7 @@ export function saveProgress(progress: WatchProgress) {
 }
 
 export function getSettings(): Settings {
-  return read(SETTINGS_KEY, { autoplay: false, subtitles: true, reducedMotion: false })
+  return { autoplay: false, subtitles: true, reducedMotion: false, trailerSound: false, ...read(SETTINGS_KEY, {}) }
 }
 
 export function saveSettings(settings: Settings) {

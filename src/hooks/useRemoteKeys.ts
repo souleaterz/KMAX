@@ -22,13 +22,14 @@ export function useRemoteKeys() {
         return
       }
       if (!verticalKeys.has(event.key) && !horizontalKeys.has(event.key)) return
+      if (event.defaultPrevented) return
       const nodes = focusable()
       const active = document.activeElement as HTMLElement | null
+      event.preventDefault()
       if (!active || !nodes.includes(active)) {
         nodes[0]?.focus()
         return
       }
-      event.preventDefault()
       const rect = active.getBoundingClientRect()
       const candidates = nodes
         .filter((node) => node !== active)
