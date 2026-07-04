@@ -2,6 +2,7 @@ export type MediaType = 'movie' | 'tv'
 
 export type MediaItem = {
   id: number
+  imdbId?: string
   mediaType: MediaType
   title: string
   overview: string

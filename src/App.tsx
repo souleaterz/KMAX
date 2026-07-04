@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { backdropUrl, imageUrl } from './config'
 import { getHomeRows, getMediaDetail, searchMedia } from './services/tmdb'
-import { findStreams } from './services/providers'
+import { findStreamsWithDiagnostics } from './services/providers'
 import { getProgressFor, getSettings, mediaKey, saveProgress, saveSettings, toggleWatchlist } from './services/storage'
 import { useProgress, useSettings, useWatchlist } from './hooks/useLocalData'
 import { useRemoteKeys } from './hooks/useRemoteKeys'
+import { isKmaxNative, nativePlay } from './services/kmaxNative'
 import type { Episode, MediaItem, MediaType, PlaybackTarget, StreamSource } from './types'
 
 function FocusLink({ to, className, children }: { to: string; className?: string; children: React.ReactNode }) {
@@ -155,7 +156,7 @@ function DetailScreen() {
   const [source, setSource] = useState<StreamSource | undefined>()
   const streamsQuery = useQuery({
     queryKey: ['streams', mediaType, id, episode?.id],
-    queryFn: () => findStreams(detailQuery.data!, episode),
+    queryFn: () => findStreamsWithDiagnostics(detailQuery.data!, episode),
     enabled: Boolean(detailQuery.data),
   })
 
@@ -163,13 +164,22 @@ function DetailScreen() {
   if (!detailQuery.data) return <EmptyState title="Title not found" body="This movie or show could not be loaded." />
   const detail = detailQuery.data
   const activeEpisode = episode ?? detail.seasons?.[0]?.episodes[0]
-  const streams = streamsQuery.data ?? []
+  const streams = streamsQuery.data?.streams ?? []
   const chosenSource = source ?? streams[0]
   const resume = activeEpisode ? getProgressFor(mediaKey(detail, activeEpisode.id)) : getProgressFor(mediaKey(detail))
   const canResume = resume && resume.seconds > 30 && resume.duration - resume.seconds > 45
 
-  function play() {
+  async function play() {
     if (!chosenSource) return
+    if (isKmaxNative()) {
+      const result = await nativePlay({
+        url: chosenSource.url,
+        title: detail.title,
+        subtitle: activeEpisode ? `S${activeEpisode.season}:E${activeEpisode.episode} ${activeEpisode.title}` : chosenSource.label,
+        startAt: canResume ? resume.seconds : 0,
+      })
+      if (result.ok) return
+    }
     sessionStorage.setItem(
       'kmax.playback',
       JSON.stringify({ media: detail, episode: activeEpisode, source: chosenSource, resumeSeconds: canResume ? resume.seconds : 0 }),
@@ -195,7 +205,15 @@ function DetailScreen() {
           <div className="source-panel">
             <h2>Play Options</h2>
             {streamsQuery.isLoading && <div className="status-box">Finding configured streams...</div>}
-            {!streamsQuery.isLoading && streams.length === 0 && <div className="status-box">No streams found for your configured providers.</div>}
+            {!streamsQuery.isLoading && streams.length === 0 && (
+              <div className="status-box">
+                <strong>No playable streams found.</strong>
+                <span>
+                  {streamsQuery.data?.messages?.[0] ??
+                    'Your enabled providers did not return a direct HLS/MP4 stream for this title.'}
+                </span>
+              </div>
+            )}
             <div className="source-list">
               {streams.map((stream) => (
                 <button key={stream.id} data-focusable="true" className={chosenSource?.id === stream.id ? 'source active' : 'source'} onClick={() => setSource(stream)}>

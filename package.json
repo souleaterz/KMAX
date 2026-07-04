@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "check:config": "node scripts/check-config.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

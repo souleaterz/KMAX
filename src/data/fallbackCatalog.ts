@@ -3,6 +3,7 @@ import type { MediaDetail, MediaItem } from '../types'
 export const fallbackCatalog: MediaDetail[] = [
   {
     id: 11,
+    imdbId: 'tt0063350',
     mediaType: 'movie',
     title: 'Night of the Living Dead',
     overview:
@@ -17,6 +18,7 @@ export const fallbackCatalog: MediaDetail[] = [
   },
   {
     id: 12,
+    imdbId: 'tt0017925',
     mediaType: 'movie',
     title: 'The General',
     overview:
@@ -31,6 +33,7 @@ export const fallbackCatalog: MediaDetail[] = [
   },
   {
     id: 13,
+    imdbId: 'tt0032599',
     mediaType: 'movie',
     title: 'His Girl Friday',
     overview:

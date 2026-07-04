@@ -69,3 +69,7 @@ KMAX is currently at Milestone 0: a working browser app, a Capacitor Android pro
 3. Resume playback prompt and better progress UI.
 4. TV focus restoration and rail navigation polish.
 5. Android TV banner/icon assets.
+
+## Collaboration Note
+
+Explain setup steps slowly and assume beginner knowledge. Prefer exact file names, exact lines, and short plain-language explanations over shorthand.

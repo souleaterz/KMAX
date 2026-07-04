@@ -54,18 +54,26 @@ function normalize(item: TmdbItem, fallbackType: MediaType, genreMap?: Map<numbe
 export async function getHomeRows() {
   if (!TMDB_TOKEN) return fallbackRows
   const [movieGenres, tvGenres] = await Promise.all([genres('movie'), genres('tv')])
-  const [trending, movies, tv, action, drama] = await Promise.all([
+  const [trending, movies, tv, nowPlaying, topRatedMovies, airingToday, action, horror, drama] = await Promise.all([
     tmdb<{ results: TmdbItem[] }>('/trending/all/week?language=en-US'),
     tmdb<{ results: TmdbItem[] }>('/movie/popular?language=en-US&page=1'),
     tmdb<{ results: TmdbItem[] }>('/tv/popular?language=en-US&page=1'),
+    tmdb<{ results: TmdbItem[] }>('/movie/now_playing?language=en-US&page=1'),
+    tmdb<{ results: TmdbItem[] }>('/movie/top_rated?language=en-US&page=1'),
+    tmdb<{ results: TmdbItem[] }>('/tv/airing_today?language=en-US&page=1'),
     tmdb<{ results: TmdbItem[] }>('/discover/movie?with_genres=28&sort_by=popularity.desc'),
+    tmdb<{ results: TmdbItem[] }>('/discover/movie?with_genres=27&sort_by=popularity.desc'),
     tmdb<{ results: TmdbItem[] }>('/discover/tv?with_genres=18&sort_by=popularity.desc'),
   ])
   return [
     { title: 'Trending Now', items: trending.results.map((item) => normalize(item, item.media_type ?? 'movie', item.media_type === 'tv' ? tvGenres : movieGenres)) },
     { title: 'Popular Movies', items: movies.results.map((item) => normalize(item, 'movie', movieGenres)) },
     { title: 'Popular TV', items: tv.results.map((item) => normalize(item, 'tv', tvGenres)) },
+    { title: 'Now Playing', items: nowPlaying.results.map((item) => normalize(item, 'movie', movieGenres)) },
+    { title: 'Top Rated Movies', items: topRatedMovies.results.map((item) => normalize(item, 'movie', movieGenres)) },
+    { title: 'Airing Today', items: airingToday.results.map((item) => normalize(item, 'tv', tvGenres)) },
     { title: 'Action Movies', items: action.results.map((item) => normalize(item, 'movie', movieGenres)) },
+    { title: 'Horror Movies', items: horror.results.map((item) => normalize(item, 'movie', movieGenres)) },
     { title: 'Drama TV', items: drama.results.map((item) => normalize(item, 'tv', tvGenres)) },
   ]
 }
@@ -89,9 +97,10 @@ export async function getMediaDetail(type: MediaType, id: number): Promise<Media
     if (!item) throw new Error('Title not found in fallback catalog')
     return item
   }
-  const detail = await tmdb<any>(`/${type}/${id}?append_to_response=credits&language=en-US`)
+  const detail = await tmdb<any>(`/${type}/${id}?append_to_response=credits,external_ids&language=en-US`)
   const base: MediaDetail = {
     id,
+    imdbId: detail.external_ids?.imdb_id,
     mediaType: type,
     title: detail.title ?? detail.name,
     overview: detail.overview ?? '',

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { findStreams, providerConfigInternals } from './providers'
 import type { MediaDetail } from '../types'
 
@@ -10,6 +10,10 @@ const baseMovie: MediaDetail = {
 }
 
 describe('stream providers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('returns sample streams for configured public-domain development content', async () => {
     const streams = await findStreams(baseMovie)
     expect(streams).toHaveLength(1)
@@ -59,6 +63,7 @@ describe('stream providers', () => {
         {
           id: 'early',
           name: 'Early Provider',
+          type: 'static',
           priority: 1,
           streams: [
             {
@@ -80,7 +85,35 @@ describe('stream providers', () => {
     })
 
     expect(providers.map((provider) => provider.id)).toEqual(['early', 'late'])
-    expect(providers[0].streams).toHaveLength(1)
-    expect(providers[0].streams[0].label).toBe('Early')
+    const firstProvider = providers[0]!
+    const streams = firstProvider.streams ?? []
+    expect(streams).toHaveLength(1)
+    expect(streams[0]!.label).toBe('Early')
+  })
+
+  it('keeps enabled Stremio-style providers without requiring static streams', () => {
+    const providers = providerConfigInternals.normalizeConfigProviders({
+      providers: [
+        {
+          id: 'stremio-addon',
+          name: 'Stremio Addon',
+          type: 'stremio',
+          baseUrl: 'https://example.test/addon',
+          priority: 5,
+        },
+      ],
+    })
+
+    expect(providers).toHaveLength(1)
+    expect(providers[0]).toMatchObject({
+      id: 'stremio-addon',
+      type: 'stremio',
+      baseUrl: 'https://example.test/addon',
+    })
+  })
+
+  it('accepts Stremio manifest URLs as addon base URLs', () => {
+    expect(providerConfigInternals.stremioBaseUrl('https://example.test/addon/manifest.json')).toBe('https://example.test/addon')
+    expect(providerConfigInternals.stremioBaseUrl('https://example.test/addon')).toBe('https://example.test/addon')
   })
 })
